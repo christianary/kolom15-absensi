@@ -1,4 +1,4 @@
-import { kv } from '@vercel/kv'
+import { database } from '../../lib/firebaseAdmin'
 
 export default async function handler(req, res) {
   if (req.method === 'POST') {
@@ -7,10 +7,10 @@ export default async function handler(req, res) {
       if (!data || typeof data !== 'object') {
         return res.status(400).json({ error: 'Data tidak valid' })
       }
-      await kv.set('kolom15_attendance', data)
+      await database.ref('attendance').set(data)
       res.status(200).json({ success: true })
     } catch (err) {
-      console.error(err)
+      console.error('Error saving attendance:', err)
       res.status(500).json({ error: 'Gagal menyimpan data' })
     }
   } else {

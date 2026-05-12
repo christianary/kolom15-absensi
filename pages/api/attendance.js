@@ -1,12 +1,13 @@
-import { kv } from '@vercel/kv'
+import { database } from '../../lib/firebaseAdmin'
 
 export default async function handler(req, res) {
   if (req.method === 'GET') {
     try {
-      const data = await kv.get('kolom15_attendance')
-      res.status(200).json({ data: data || {} })
+      const snapshot = await database.ref('attendance').get()
+      const data = snapshot.val() || {}
+      res.status(200).json({ data })
     } catch (err) {
-      console.error(err)
+      console.error('Error fetching attendance:', err)
       res.status(500).json({ error: 'Gagal mengambil data' })
     }
   } else {
