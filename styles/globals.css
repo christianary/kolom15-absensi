@@ -1,0 +1,32 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background: #0f1219;
+  color: #e8eaf0;
+  min-height: 100vh;
+}
+
+:root {
+  --gold: #c9a84c;
+  --gold-light: #f0d080;
+  --gold-dark: #8a6820;
+  --bg-deep: #0f1219;
+  --bg-card: #181d28;
+  --bg-card2: #1e2535;
+  --border: #2a3146;
+  --border-gold: rgba(201, 168, 76, 0.3);
+  --text: #e8eaf0;
+  --muted: #6b7699;
+  --success: #3dbe7a;
+  --danger: #e05555;
+  --radius: 12px;
+  --radius-lg: 18px;
+}
+
+button { cursor: pointer; font-family: inherit; }
+input, select { font-family: inherit; }
