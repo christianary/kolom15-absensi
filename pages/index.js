@@ -114,9 +114,22 @@ export default function Home() {
     const key = weekKey(w)
     setAttendance(prev => {
       const weekData = prev[key] || {}
-      const cur = weekData[name] || 'unmarked'
+      const current = weekData[name] || { status: 'unmarked', notes: '' }
+      const cur = current.status || 'unmarked'
       const next = cur === 'unmarked' ? 'hadir' : cur === 'hadir' ? 'absent' : 'hadir'
-      const updated = { ...prev, [key]: { ...weekData, [name]: next } }
+      const updated = { ...prev, [key]: { ...weekData, [name]: { ...current, status: next } } }
+      saveToServer(updated)
+      return updated
+    })
+  }
+
+  const setMemberNotes = (name, notes) => {
+    const w = ALL_WEEKS[weekIdx]
+    const key = weekKey(w)
+    setAttendance(prev => {
+      const weekData = prev[key] || {}
+      const current = weekData[name] || { status: 'unmarked', notes: '' }
+      const updated = { ...prev, [key]: { ...weekData, [name]: { ...current, notes } } }
       saveToServer(updated)
       return updated
     })
@@ -127,7 +140,7 @@ export default function Home() {
     const key = weekKey(w)
     setAttendance(prev => {
       const weekData = {}
-      MEMBERS.forEach(m => weekData[m] = status)
+      MEMBERS.forEach(m => weekData[m] = { status, notes: '' })
       const updated = { ...prev, [key]: weekData }
       saveToServer(updated)
       return updated
@@ -151,8 +164,14 @@ export default function Home() {
   const currentWeek = ALL_WEEKS[weekIdx]
   const currentKey  = weekKey(currentWeek)
   const weekData    = attendance[currentKey] || {}
-  const hadirCount  = MEMBERS.filter(m => weekData[m] === 'hadir').length
-  const absenCount  = MEMBERS.filter(m => weekData[m] === 'absent').length
+  const hadirCount  = MEMBERS.filter(m => {
+    const d = weekData[m]
+    return typeof d === 'object' ? d.status === 'hadir' : d === 'hadir'
+  }).length
+  const absenCount  = MEMBERS.filter(m => {
+    const d = weekData[m]
+    return typeof d === 'object' ? d.status === 'absent' : d === 'absent'
+  }).length
   const markedCount = hadirCount + absenCount
   const pct         = markedCount > 0 ? Math.round(hadirCount / markedCount * 100) : null
 
@@ -186,8 +205,10 @@ export default function Home() {
     let hadir = 0, absen = 0, blank = 0
     ALL_WEEKS.forEach(w => {
       const d = attendance[weekKey(w)] || {}
-      if (d[name] === 'hadir') hadir++
-      else if (d[name] === 'absent') absen++
+      const memberData = d[name]
+      const status = typeof memberData === 'object' ? memberData.status : memberData
+      if (status === 'hadir') hadir++
+      else if (status === 'absent') absen++
       else blank++
     })
     const marked = hadir + absen
@@ -200,16 +221,21 @@ export default function Home() {
     if (!weeks.length) { showToast('Tidak ada data untuk diekspor'); return }
     let csv = 'Nama Jemaat'
     weeks.forEach(w => csv += `,${fmtDate(w)}`)
-    csv += ',Total Hadir,%\n'
+    csv += ',Total Hadir,%,Keterangan\n'
     MEMBERS.forEach(name => {
       let h = 0
+      const allNotes = []
       csv += name
       weeks.forEach(w => {
-        const s = (attendance[weekKey(w)] || {})[name]
-        csv += ',' + (s === 'hadir' ? 'H' : s === 'absent' ? 'A' : '-')
-        if (s === 'hadir') h++
+        const d = attendance[weekKey(w)] || {}
+        const memberData = d[name]
+        const status = typeof memberData === 'object' ? memberData.status : memberData
+        const notes = typeof memberData === 'object' ? memberData.notes : ''
+        csv += ',' + (status === 'hadir' ? 'H' : status === 'absent' ? 'A' : '-')
+        if (status === 'hadir') h++
+        if (notes) allNotes.push(notes)
       })
-      csv += `,${h},${Math.round(h / weeks.length * 100)}%\n`
+      csv += `,${h},${Math.round(h / weeks.length * 100)}%,"${allNotes.join('; ')}"\n`
     })
     const [y, mo] = selectedMonth.split('-').map(Number)
     const blob = new Blob([csv], { type: 'text/csv' })
@@ -217,6 +243,32 @@ export default function Home() {
     const a    = document.createElement('a')
     a.href = url; a.download = `Absensi_Kolom15_${MONTHS[mo]}_${y}.csv`; a.click()
     showToast('Export CSV berhasil!')
+  }
+
+  function exportAllYearCSV() {
+    const year = new Date().getFullYear()
+    const yearWeeks = ALL_WEEKS.filter(w => w.getFullYear() === year)
+    if (!yearWeeks.length) { showToast('Tidak ada data untuk tahun ini'); return }
+    let csv = 'Nama Jemaat'
+    yearWeeks.forEach(w => csv += `,${fmtDate(w)}`)
+    csv += ',Total Hadir,%\n'
+    MEMBERS.forEach(name => {
+      let h = 0
+      csv += name
+      yearWeeks.forEach(w => {
+        const d = attendance[weekKey(w)] || {}
+        const memberData = d[name]
+        const status = typeof memberData === 'object' ? memberData.status : memberData
+        csv += ',' + (status === 'hadir' ? 'H' : status === 'absent' ? 'A' : '-')
+        if (status === 'hadir') h++
+      })
+      csv += `,${h},${Math.round(h / yearWeeks.length * 100)}%\n`
+    })
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement('a')
+    a.href = url; a.download = `Absensi_Kolom15_Tahun_${year}.csv`; a.click()
+    showToast('Export CSV Tahunan berhasil!')
   }
 
   const progressPct = Math.round(((weekIdx + 1) / ALL_WEEKS.length) * 100)
@@ -336,7 +388,9 @@ export default function Home() {
           {/* Member list */}
           <div className={styles.memberGrid}>
             {filteredMembers.map(name => {
-              const status = weekData[name] || 'unmarked'
+              const memberData = weekData[name] || { status: 'unmarked', notes: '' }
+              const status = typeof memberData === 'object' ? memberData.status : memberData
+              const notes = typeof memberData === 'object' ? memberData.notes : ''
               return (
                 <div key={name} className={styles.memberRow}>
                   <div className={styles.memberNum}>{MEMBERS.indexOf(name)+1}</div>
@@ -351,6 +405,13 @@ export default function Home() {
                   >
                     {status === 'hadir' ? '✓ Hadir' : status === 'absent' ? '✗ Absen' : '— Tandai'}
                   </button>
+                  <input
+                    type="text"
+                    placeholder="Keterangan..."
+                    className={styles.notesInput}
+                    value={notes}
+                    onChange={e => setMemberNotes(name, e.target.value)}
+                  />
                 </div>
               )
             })}
@@ -376,7 +437,10 @@ export default function Home() {
               ))}
             </select>
             <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={exportCSV}>
-              <i className="fa-solid fa-download"></i> Export CSV
+              <i className="fa-solid fa-download"></i> Export Bulan Ini
+            </button>
+            <button className={`${styles.btn} ${styles.btnPrimary}`} onClick={exportAllYearCSV}>
+              <i className="fa-solid fa-file-csv"></i> Export Semua Tahun
             </button>
           </div>
 
@@ -420,17 +484,22 @@ export default function Home() {
                       {reportWeeks.map(w => <th key={weekKey(w)}>{fmtShort(w)}</th>)}
                       <th>Hadir</th>
                       <th>%</th>
+                      <th>Keterangan</th>
                     </tr>
                   </thead>
                   <tbody>
                     {MEMBERS.map(name => {
                       let h = 0
                       const cells = reportWeeks.map(w => {
-                        const s = (attendance[weekKey(w)] || {})[name]
-                        if (s === 'hadir') h++
-                        return { key: weekKey(w), status: s }
+                        const d = attendance[weekKey(w)] || {}
+                        const memberData = d[name]
+                        const status = typeof memberData === 'object' ? memberData.status : memberData
+                        const notes = typeof memberData === 'object' ? memberData.notes : ''
+                        if (status === 'hadir') h++
+                        return { key: weekKey(w), status, notes }
                       })
                       const p = Math.round(h / reportWeeks.length * 100)
+                      const allNotes = cells.filter(c => c.notes).map(c => c.notes).join('; ')
                       return (
                         <tr key={name}>
                           <td style={{textAlign:'left'}}>{name}</td>
@@ -448,6 +517,7 @@ export default function Home() {
                               {p}%
                             </span>
                           </td>
+                          <td style={{fontSize:12, maxWidth:200}}>{allNotes || '—'}</td>
                         </tr>
                       )
                     })}
